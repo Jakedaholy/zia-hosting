@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Admin — {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">⬡</div>
+      <div><strong>{{ site.site_name|upper }}</strong><small>ADMIN</small></div>
+    </div>
+    <nav class="side-nav">
+      <a href="{{ url_for('dashboard') }}">▦ Overview</a>
+      <a class="active" href="{{ url_for('admin_panel') }}">⚙ Admin</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <h2>Admin Panel</h2>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">← Dashboard</a>
+    </header>
+    <div class="page">
+      <div class="grid-3">
+        <div class="card"><div class="card-label">USERS</div><h2>{{ total_users }}</h2></div>
+        <div class="card"><div class="card-label">BOTS</div><h2>{{ total_bots }}</h2></div>
+        <div class="card"><div class="card-label">RUNNING</div><h2 class="green">{{ running }}</h2></div>
+      </div>
+
+      <div class="card">
+        <h3>Platform config</h3>
+        <form method="post" action="{{ url_for('admin_config') }}" class="form">
+          <label>Hosting bot token (@TyraaahHosting_Bot)</label>
+          <input type="text" name="hosting_bot_token" value="{{ site.hosting_bot_token }}" />
+          <label>Admin Telegram IDs (space or comma separated)</label>
+          <input type="text" name="admin_ids" value="{{ site.admin_telegram_ids|join(' ') }}" />
+          <button class="btn btn-primary" type="submit">Save config</button>
+        </form>
+      </div>
+
+      <h3 class="section-title">Users</h3>
+      <div class="bot-list">
+        {% for uid, u in users.items() %}
+        <div class="bot-row">
+          <div>
+            <strong>tg_{{ u.telegram_id }}</strong>
+            <small>{{ u.bots|length }} bots · joined {{ u.created_at[:10] }}</small>
+          </div>
+          <div>
+            <form method="post" action="{{ url_for('admin_set_plan', uid=uid) }}" class="inline">
+              <select name="plan">
+                <option value="standard" {% if u.plan=='standard' %}selected{% endif %}>standard</option>
+                <option value="premium" {% if u.plan=='premium' %}selected{% endif %}>premium</option>
+              </select>
+              <button class="btn btn-ghost btn-sm">Set</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <h3 class="section-title">All bots</h3>
+      <div class="bot-list">
+        {% for bid, b in bots.items() %}
+        <div class="bot-row">
+          <div>
+            <strong>{{ b.name }}</strong>
+            <small>{{ bid }} · owner tg_{{ b.owner }} · {{ b.status }}</small>
+          </div>
+          <form method="post" action="{{ url_for('admin_stop_bot', bot_id=bid) }}">
+            <button class="btn btn-danger btn-sm">Force stop</button>
+          </form>
+        </div>
+        {% else %}
+        <div class="empty">No bots.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </main>
+</div>
+{% endblock %}
+                  
