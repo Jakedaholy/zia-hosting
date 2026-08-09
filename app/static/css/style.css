@@ -213,3 +213,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .bot-row { flex-direction: column; align-items: flex-start; }
   .page { padding: 18px 16px 40px; }
 }
+
+.side-sub { display:block; color:var(--muted); font-size:.68rem; letter-spacing:.08em; }
+.topbar-right { display:flex; gap:8px; align-items:center; }
+.plan-card { text-align:center; }
+@media (max-width: 1100px) {
+  .features .grid-2 { grid-template-columns: 1fr 1fr !important; }
+}
+@media (max-width: 700px) {
+  .features .grid-2 { grid-template-columns: 1fr !important; }
+}
