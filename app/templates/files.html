@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Files — {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">⬡</div>
+      <div><strong>{{ site.site_name|upper }}</strong><small>HOSTING</small></div>
+    </div>
+    <nav class="side-nav">
+      <div class="nav-section">GENERAL</div>
+      <a href="{{ url_for('dashboard') }}">▦ Overview</a>
+      <a class="active" href="{{ url_for('files') }}">📁 Files</a>
+      <a href="{{ url_for('new_bot') }}">↗ New Project</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <h2>File Manager</h2>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">← Back</a>
+    </header>
+    <div class="page">
+      <div class="card">
+        <div class="card-label">STORAGE USAGE</div>
+        <h3>{{ '%.1f'|format(total / 1024) }} KB <small class="muted">of 2.5 GB</small></h3>
+        <div class="bar"><div class="bar-fill" style="width: {{ (total / limit * 100)|round(4) }}%"></div></div>
+        <p class="muted">{{ items|length }} files</p>
+      </div>
+      <div class="file-list">
+        {% for it in items %}
+        <div class="file-row">
+          <span>{{ it.path }}</span>
+          <span class="muted">{{ it.size }} B</span>
+        </div>
+        {% else %}
+        <div class="empty">No files yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </main>
+</div>
+{% endblock %}

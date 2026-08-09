@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ site.site_name }} — Python Bot Hosting{% endblock %}
+{% block body %}
+<div class="landing">
+  <nav class="nav">
+    <div class="brand">
+      <div class="logo">⬡</div>
+      <span>{{ site.site_name }}</span>
+    </div>
+    <div class="nav-actions">
+      <a href="{{ url_for('login') }}" class="btn btn-ghost">Sign In</a>
+      <a href="{{ url_for('login') }}" class="btn btn-primary">Start Hosting →</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="badge">✦ Free 24/7 Python hosting</div>
+    <h1>Host your<br>Python bots in<br>one click.</h1>
+    <p class="lead">
+      Reliable, fast hosting for Telegram bots.
+      Sign up, upload your project, and manage everything from one clean dashboard.
+    </p>
+    <div class="hero-actions">
+      <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">Start Hosting →</a>
+      <a href="#features" class="btn btn-ghost btn-lg">See Features</a>
+    </div>
+    <div class="stats-row">
+      <div><strong>99.9%</strong><span>UPTIME SLA</span></div>
+      <div><strong>~1s</strong><span>DEPLOY TIME</span></div>
+    </div>
+  </section>
+
+  <section id="features" class="features">
+    <h2>Built for bot makers</h2>
+    <div class="grid-3">
+      <div class="card">
+        <h3>One-click deploy</h3>
+        <p>Upload a .py or .zip. We inject BOT_TOKEN and start polling for you.</p>
+      </div>
+      <div class="card">
+        <h3>Live control</h3>
+        <p>Start, stop, delete, and read logs from the dashboard in real time.</p>
+      </div>
+      <div class="card">
+        <h3>Telegram OTP login</h3>
+        <p>No passwords. Sign in with your Telegram ID and a one-time code.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <span>Made for Axion · {{ site.site_name }}</span>
+  </footer>
+</div>
+{% endblock %}

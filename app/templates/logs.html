@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Logs — {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">⬡</div>
+      <div><strong>{{ site.site_name|upper }}</strong><small>HOSTING</small></div>
+    </div>
+    <nav class="side-nav">
+      <a href="{{ url_for('dashboard') }}">▦ Overview</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <h2>Logs · {{ bot_id }}</h2>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">← Back</a>
+    </header>
+    <div class="page">
+      <pre class="log-box">{{ logs or '(no logs yet)' }}</pre>
+    </div>
+  </main>
+</div>
+{% endblock %}

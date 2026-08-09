@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Sign In — {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="logo">⬡</div>
+      <span>{{ site.site_name }}</span>
+    </div>
+    <div class="tabs">
+      <span class="tab active">Sign In</span>
+      <span class="tab muted">Sign Up</span>
+    </div>
+
+    <h1>Welcome back</h1>
+    <p class="sub">
+      Registered users receive a Telegram OTP immediately.
+      Open your hosting bot and press Start before signing in.
+    </p>
+
+    {% if step != 'otp' %}
+    <form method="post" class="form">
+      <input type="hidden" name="action" value="send_otp" />
+      <label>TELEGRAM ID</label>
+      <div class="input-icon">
+        <span>👤</span>
+        <input type="text" name="telegram_id" placeholder="123456789" value="{{ telegram_id or '' }}" required />
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">✓ SEND LOGIN OTP</button>
+    </form>
+    {% else %}
+    <form method="post" class="form">
+      <input type="hidden" name="action" value="verify_otp" />
+      <input type="hidden" name="telegram_id" value="{{ telegram_id }}" />
+      <label>TELEGRAM ID</label>
+      <div class="input-icon">
+        <span>👤</span>
+        <input type="text" value="{{ telegram_id }}" disabled />
+      </div>
+      <label>VERIFICATION CODE</label>
+      <div class="input-icon">
+        <span>#</span>
+        <input type="text" name="code" placeholder="6-digit code" maxlength="6" required autofocus />
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Verify and continue</button>
+    </form>
+    <p class="hint">Code sent to Telegram ID ending in {{ telegram_id[-4:] }}.</p>
+    {% endif %}
+
+    <a href="{{ url_for('index') }}" class="back-link">← Back to home</a>
+  </div>
+</div>
+{% endblock %}
