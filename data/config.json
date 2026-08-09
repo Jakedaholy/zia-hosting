@@ -1,0 +1,10 @@
+{
+  "admin_telegram_ids": [8632939616],
+  "hosting_bot_token": "8734651152:AAEJ1QiSPl152btq1REVXx6iy-A45Gsg48s",
+  "secret_key": "zia-admin-123",
+  "max_bots_free": 3,
+  "max_bots_premium": 50,
+  "site_name": "Ziaaahosting",
+  "site_tagline": "Host your Python bots in one click."
+}
+
