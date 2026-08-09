@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""
-ZiaDev — Telegram Bot Hosting Platform
-Dashboard + OTP login + bot deploy + process manager
-"""
+"""Ziaa — Telegram Bot Hosting Platform"""
 
 import os
 import sys
@@ -10,9 +7,8 @@ import json
 import time
 import uuid
 import shutil
-import signal
 import secrets
-import hashlib
+import zipfile
 import subprocess
 import threading
 from datetime import datetime, timedelta
@@ -21,16 +17,14 @@ from functools import wraps
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, session, jsonify, send_from_directory, abort
+    flash, session, abort, send_file
 )
 from werkzeug.utils import secure_filename
 
-# ─── PATHS ───────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 BOTS_DIR = BASE_DIR / "bots"
-UPLOAD_DIR = BASE_DIR / "uploads"
-for d in (DATA_DIR, BOTS_DIR, UPLOAD_DIR):
+for d in (DATA_DIR, BOTS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 USERS_FILE = DATA_DIR / "users.json"
@@ -38,15 +32,19 @@ BOTS_FILE = DATA_DIR / "bots.json"
 OTP_FILE = DATA_DIR / "otps.json"
 CONFIG_FILE = DATA_DIR / "config.json"
 
-# ─── DEFAULT CONFIG ──────────────────────────────────────────────────────────
 DEFAULT_CONFIG = {
-    "admin_telegram_ids": [8632939616],          # your telegram id
-    "hosting_bot_token": "YOUR_HOSTING_BOT_TOKEN",  # @ZiaaahHosting_Bot token
-    "secret_key": secrets.token_hex(32),
-    "max_bots_free": 3,
-    "max_bots_premium": 15,
-    "site_name": "Ziaaahosting",
-    "site_tagline": "Host your Python bots in one click.",
+    "admin_usernames": ["maisanyvokei"],
+    "admin_telegram_ids": [],
+    "hosting_bot_token": "YOUR_HOSTING_BOT_TOKEN",
+    "secret_key": secrets.token_hex(24),
+    "site_name": "Ziaa",
+    "site_tagline": "Deploy Telegram bots. Stay online.",
+    "plans": {
+        "free":    {"bots": 1,  "days": 2,  "price": 0},
+        "basic":   {"bots": 3,  "days": 5,  "price": 50},
+        "elite":   {"bots": 10, "days": 7,  "price": 90},
+        "premium": {"bots": 30, "days": 21, "price": 120},
+    },
 }
 
 def load_json(path, default):
@@ -56,7 +54,7 @@ def load_json(path, default):
                 return json.load(f)
         except Exception:
             pass
-    return default.copy() if isinstance(default, dict) else default
+    return default.copy() if isinstance(default, dict) else list(default) if isinstance(default, list) else default
 
 def save_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
@@ -74,29 +72,29 @@ def get_config():
 def get_users():
     return load_json(USERS_FILE, {})
 
-def save_users(users):
-    save_json(USERS_FILE, users)
+def save_users(u):
+    save_json(USERS_FILE, u)
 
 def get_bots_db():
     return load_json(BOTS_FILE, {})
 
-def save_bots_db(bots):
-    save_json(BOTS_FILE, bots)
+def save_bots_db(b):
+    save_json(BOTS_FILE, b)
 
 def get_otps():
     return load_json(OTP_FILE, {})
 
-def save_otps(otps):
-    save_json(OTP_FILE, otps)
+def save_otps(o):
+    save_json(OTP_FILE, o)
 
-# ─── FLASK APP ───────────────────────────────────────────────────────────────
 app = Flask(__name__)
-cfg = get_config()
-app.secret_key = cfg["secret_key"]
-app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB
+cfg0 = get_config()
+app.secret_key = cfg0["secret_key"]
+app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
+app.permanent_session_lifetime = timedelta(days=30)
 
-# ─── PROCESS MANAGER ─────────────────────────────────────────────────────────
-running_procs = {}  # bot_id -> subprocess.Popen
+# ── process manager ──────────────────────────────────────────────────────────
+running_procs = {}
 proc_lock = threading.Lock()
 
 def bot_workdir(user_id, bot_id):
@@ -106,15 +104,19 @@ def start_bot_process(user_id, bot_id, token, entry_file="main.py"):
     work = bot_workdir(user_id, bot_id)
     entry = work / entry_file
     if not entry.exists():
-        return False, "Entry file not found"
-
+        # try common names
+        for c in ("main.py", "bot.py", "app.py", "run.py"):
+            if (work / c).exists():
+                entry = work / c
+                entry_file = c
+                break
+        else:
+            return False, "Entry file not found"
     log_path = work / "bot.log"
     env = os.environ.copy()
     env["BOT_TOKEN"] = token
     env["PYTHONUNBUFFERED"] = "1"
-
     with proc_lock:
-        # stop old if any
         if bot_id in running_procs:
             try:
                 running_procs[bot_id].terminate()
@@ -125,19 +127,16 @@ def start_bot_process(user_id, bot_id, token, entry_file="main.py"):
                 except Exception:
                     pass
             running_procs.pop(bot_id, None)
-
         try:
             log_f = open(log_path, "a", encoding="utf-8")
             p = subprocess.Popen(
                 [sys.executable, str(entry)],
-                cwd=str(work),
-                env=env,
-                stdout=log_f,
-                stderr=subprocess.STDOUT,
+                cwd=str(work), env=env,
+                stdout=log_f, stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
             running_procs[bot_id] = p
-            return True, "started"
+            return True, entry_file
         except Exception as e:
             return False, str(e)
 
@@ -167,29 +166,37 @@ def is_bot_running(bot_id):
             return False
         return True
 
-# ─── OTP + TELEGRAM ──────────────────────────────────────────────────────────
-def send_telegram_otp(telegram_id, code):
+# ── telegram helpers ─────────────────────────────────────────────────────────
+def tg_send(chat_id, text):
     cfg = get_config()
     token = cfg.get("hosting_bot_token", "")
     if not token or token == "YOUR_HOSTING_BOT_TOKEN":
-        # fallback: print to console for local testing
-        print(f"[OTP] telegram_id={telegram_id} code={code}")
-        return True
+        print(f"[TG] {chat_id}: {text}")
+        return False
     try:
         import telebot
         bot = telebot.TeleBot(token)
-        bot.send_message(
-            telegram_id,
-            f"<b>Ziahosting Login Code</b>\n\n"
-            f"Your verification code is:\n"
-            f"<code>{code}</code>\n\n"
-            f"Valid for 5 minutes. Do not share it.",
-            parse_mode="HTML",
-        )
+        bot.send_message(chat_id, text, parse_mode="HTML")
         return True
     except Exception as e:
-        print(f"[OTP ERROR] {e}")
+        print(f"[TG ERR] {e}")
         return False
+
+def send_otp(telegram_id, code):
+    return tg_send(
+        telegram_id,
+        f"<b>Ziaa Login Code</b>\n\n<code>{code}</code>\n\nValid 5 minutes. Do not share.",
+    )
+
+def notify_plan(telegram_id, plan, days, price):
+    return tg_send(
+        telegram_id,
+        f"<b>Ziaa Plan Update</b>\n\n"
+        f"Plan: <b>{plan.upper()}</b>\n"
+        f"Duration: <b>{days} days</b>\n"
+        f"Price: <b>${price}</b>\n\n"
+        f"Your workspace limits were refreshed. Open the dashboard to deploy.",
+    )
 
 def create_otp(telegram_id):
     code = f"{secrets.randbelow(1000000):06d}"
@@ -212,8 +219,7 @@ def verify_otp(telegram_id, code):
         otps.pop(key, None)
         save_otps(otps)
         return False, "Too many attempts"
-    expires = datetime.fromisoformat(entry["expires"])
-    if datetime.utcnow() > expires:
+    if datetime.utcnow() > datetime.fromisoformat(entry["expires"]):
         otps.pop(key, None)
         save_otps(otps)
         return False, "OTP expired"
@@ -225,90 +231,177 @@ def verify_otp(telegram_id, code):
     save_otps(otps)
     return True, "ok"
 
-# ─── AUTH HELPERS ────────────────────────────────────────────────────────────
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if "user_id" not in session:
-            return redirect(url_for("login"))
-        return f(*args, **kwargs)
-    return decorated
+# ── user / plan ──────────────────────────────────────────────────────────────
+def plan_info(name):
+    plans = get_config().get("plans", DEFAULT_CONFIG["plans"])
+    return plans.get(name, plans["free"])
 
-def admin_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if "user_id" not in session:
-            return redirect(url_for("login"))
-        cfg = get_config()
-        if int(session["user_id"]) not in [int(x) for x in cfg.get("admin_telegram_ids", [])]:
-            abort(403)
-        return f(*args, **kwargs)
-    return decorated
-
-def current_user():
-    users = get_users()
-    uid = str(session.get("user_id", ""))
-    return users.get(uid)
-
-def ensure_user(telegram_id):
+def ensure_user(telegram_id, username=""):
     users = get_users()
     key = str(telegram_id)
+    now = datetime.utcnow()
     if key not in users:
+        p = plan_info("free")
         users[key] = {
             "telegram_id": int(telegram_id),
-            "plan": "standard",
-            "created_at": datetime.utcnow().isoformat(),
+            "username": (username or "").lstrip("@").lower(),
+            "plan": "free",
+            "plan_expires": (now + timedelta(days=p["days"])).isoformat(),
+            "created_at": now.isoformat(),
             "bots": [],
         }
         save_users(users)
+    else:
+        if username and not users[key].get("username"):
+            users[key]["username"] = username.lstrip("@").lower()
+            save_users(users)
     return users[key]
 
-# ─── ROUTES: PUBLIC ──────────────────────────────────────────────────────────
+def user_plan_active(user):
+    exp = user.get("plan_expires")
+    if not exp:
+        return False
+    try:
+        return datetime.utcnow() <= datetime.fromisoformat(exp)
+    except Exception:
+        return False
+
+def user_bot_limit(user):
+    if not user_plan_active(user):
+        return 0
+    return plan_info(user.get("plan", "free"))["bots"]
+
+def days_left(user):
+    exp = user.get("plan_expires")
+    if not exp:
+        return 0
+    try:
+        delta = datetime.fromisoformat(exp) - datetime.utcnow()
+        return max(0, delta.days)
+    except Exception:
+        return 0
+
+def set_plan(user_key, plan, notify=True):
+    users = get_users()
+    if user_key not in users:
+        return False
+    p = plan_info(plan)
+    users[user_key]["plan"] = plan
+    users[user_key]["plan_expires"] = (datetime.utcnow() + timedelta(days=p["days"])).isoformat()
+    save_users(users)
+    if notify:
+        notify_plan(users[user_key]["telegram_id"], plan, p["days"], p["price"])
+    return True
+
+def is_admin(user):
+    cfg = get_config()
+    uname = (user.get("username") or "").lower()
+    tid = int(user.get("telegram_id", 0))
+    if uname and uname in [x.lower() for x in cfg.get("admin_usernames", [])]:
+        return True
+    if tid and tid in [int(x) for x in cfg.get("admin_telegram_ids", [])]:
+        return True
+    return False
+
+# ── auth ─────────────────────────────────────────────────────────────────────
+def login_required(f):
+    @wraps(f)
+    def wrap(*a, **k):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        return f(*a, **k)
+    return wrap
+
+def admin_required(f):
+    @wraps(f)
+    def wrap(*a, **k):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        user = current_user()
+        if not user or not is_admin(user):
+            abort(403)
+        return f(*a, **k)
+    return wrap
+
+def current_user():
+    users = get_users()
+    return users.get(str(session.get("user_id", "")))
+
+# ── starters ─────────────────────────────────────────────────────────────────
+STARTERS = {
+    "pyTelegramBotAPI": '''#!/usr/bin/env python3
+import os, telebot
+TOKEN = os.environ.get("BOT_TOKEN", "")
+bot = telebot.TeleBot(TOKEN)
+
+@bot.message_handler(commands=["start"])
+def start(m):
+    bot.reply_to(m, "Online via Ziaa hosting.")
+
+@bot.message_handler(commands=["ping"])
+def ping(m):
+    bot.reply_to(m, "Pong")
+
+@bot.message_handler(func=lambda m: True)
+def echo(m):
+    bot.reply_to(m, m.text or "")
+
+if __name__ == "__main__":
+    print("Ziaa bot starting...")
+    bot.infinity_polling()
+''',
+}
+
+# ── routes: public ───────────────────────────────────────────────────────────
 @app.route("/")
 def index():
-    return render_template("index.html", site=get_config())
+    return render_template("index.html", site=get_config(), plans=get_config()["plans"])
+
+@app.route("/pricing")
+def pricing():
+    return render_template("pricing.html", site=get_config(), plans=get_config()["plans"])
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if session.get("user_id"):
+        return redirect(url_for("dashboard"))
+    site = get_config()
     if request.method == "GET":
-        return render_template("login.html", site=get_config())
+        return render_template("login.html", site=site)
 
     action = request.form.get("action")
     telegram_id = request.form.get("telegram_id", "").strip()
-
     if not telegram_id.isdigit():
-        flash("Enter a valid Telegram ID (numbers only).", "error")
-        return render_template("login.html", site=get_config())
+        flash("Telegram ID must be numbers only.", "error")
+        return render_template("login.html", site=site)
 
     if action == "send_otp":
         code = create_otp(telegram_id)
-        ok = send_telegram_otp(int(telegram_id), code)
-        if ok:
-            flash("OTP sent. Open the hosting bot and check your messages.", "success")
-        else:
-            flash("Could not send OTP. Check hosting bot token in config.", "error")
-        return render_template("login.html", site=get_config(), telegram_id=telegram_id, step="otp")
+        ok = send_otp(int(telegram_id), code)
+        flash("OTP sent to your Telegram." if ok else "OTP created (check hosting bot token / console).", "success" if ok else "error")
+        return render_template("login.html", site=site, telegram_id=telegram_id, step="otp")
 
     if action == "verify_otp":
         code = request.form.get("code", "").strip()
         ok, msg = verify_otp(telegram_id, code)
         if not ok:
             flash(msg, "error")
-            return render_template("login.html", site=get_config(), telegram_id=telegram_id, step="otp")
-        ensure_user(telegram_id)
-        session["user_id"] = int(telegram_id)
+            return render_template("login.html", site=site, telegram_id=telegram_id, step="otp")
+        username = request.form.get("username", "").strip()
+        ensure_user(telegram_id, username)
         session.permanent = True
+        session["user_id"] = int(telegram_id)
         return redirect(url_for("dashboard"))
 
     flash("Invalid action.", "error")
-    return render_template("login.html", site=get_config())
+    return render_template("login.html", site=site)
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("index"))
 
-# ─── ROUTES: DASHBOARD ───────────────────────────────────────────────────────
+# ── dashboard ────────────────────────────────────────────────────────────────
 @app.route("/dashboard")
 @login_required
 def dashboard():
@@ -321,79 +414,86 @@ def dashboard():
             b = dict(b)
             b["running"] = is_bot_running(bid)
             user_bots.append(b)
-
-    cfg = get_config()
-    limit = cfg["max_bots_premium"] if user.get("plan") == "premium" else cfg["max_bots_free"]
+    limit = user_bot_limit(user)
     active = sum(1 for b in user_bots if b.get("running"))
-    stopped = len(user_bots) - active
-
     return render_template(
         "dashboard.html",
-        site=cfg,
+        site=get_config(),
         user=user,
         bots=user_bots,
         limit=limit,
         active=active,
-        stopped=stopped,
+        stopped=len(user_bots) - active,
+        days=days_left(user),
+        plan_active=user_plan_active(user),
+        is_admin=is_admin(user),
     )
 
 @app.route("/bots/new", methods=["GET", "POST"])
 @login_required
 def new_bot():
     user = current_user()
-    cfg = get_config()
-    limit = cfg["max_bots_premium"] if user.get("plan") == "premium" else cfg["max_bots_free"]
+    site = get_config()
+    limit = user_bot_limit(user)
+    if not user_plan_active(user):
+        flash("Plan expired. Upgrade to deploy bots.", "error")
+        return redirect(url_for("pricing"))
     if len(user.get("bots", [])) >= limit:
-        flash(f"Bot limit reached ({limit}). Upgrade for more slots.", "error")
-        return redirect(url_for("dashboard"))
+        flash(f"Bot limit reached ({limit}). Upgrade plan.", "error")
+        return redirect(url_for("pricing"))
 
     if request.method == "GET":
-        return render_template("new_bot.html", site=cfg)
+        return render_template("new_bot.html", site=site)
 
-    name = request.form.get("name", "").strip() or "My Bot"
-    token = request.form.get("token", "").strip()
-    library = request.form.get("library", "pyTelegramBotAPI")
+    name = (request.form.get("name") or "My Bot").strip()
+    token = (request.form.get("token") or "").strip()
+    entry_file = (request.form.get("entry_file") or "main.py").strip() or "main.py"
+    if not entry_file.endswith(".py"):
+        entry_file += ".py"
     upload = request.files.get("bot_file")
 
     if not token:
-        flash("Bot token is required.", "error")
-        return render_template("new_bot.html", site=cfg)
+        flash("Bot token required.", "error")
+        return render_template("new_bot.html", site=site)
 
     bot_id = uuid.uuid4().hex[:12]
     uid = str(session["user_id"])
     work = bot_workdir(uid, bot_id)
     work.mkdir(parents=True, exist_ok=True)
 
-    entry_file = "main.py"
     if upload and upload.filename:
         filename = secure_filename(upload.filename)
-        if filename.endswith(".zip"):
-            zip_path = work / filename
-            upload.save(zip_path)
-            shutil.unpack_archive(str(zip_path), str(work))
-            zip_path.unlink(missing_ok=True)
-            # find a main entry
-            for candidate in ("main.py", "bot.py", "app.py", "run.py"):
-                if (work / candidate).exists():
-                    entry_file = candidate
-                    break
-            else:
-                pys = list(work.glob("*.py"))
-                if pys:
-                    entry_file = pys[0].name
-        elif filename.endswith(".py"):
-            upload.save(work / "main.py")
-            entry_file = "main.py"
+        if filename.lower().endswith(".zip"):
+            zpath = work / filename
+            upload.save(zpath)
+            try:
+                with zipfile.ZipFile(zpath, "r") as zf:
+                    zf.extractall(work)
+            except Exception as e:
+                shutil.rmtree(work, ignore_errors=True)
+                flash(f"Zip extract failed: {e}", "error")
+                return render_template("new_bot.html", site=site)
+            zpath.unlink(missing_ok=True)
+            # auto-detect entry if chosen file missing
+            if not (work / entry_file).exists():
+                for c in ("main.py", "bot.py", "app.py", "run.py"):
+                    if (work / c).exists():
+                        entry_file = c
+                        break
+                else:
+                    pys = list(work.rglob("*.py"))
+                    if pys:
+                        entry_file = str(pys[0].relative_to(work))
+        elif filename.lower().endswith(".py"):
+            dest = work / entry_file
+            upload.save(dest)
         else:
-            flash("Upload a .py or .zip file.", "error")
             shutil.rmtree(work, ignore_errors=True)
-            return render_template("new_bot.html", site=cfg)
+            flash("Upload a .py or .zip file.", "error")
+            return render_template("new_bot.html", site=site)
     else:
-        # generate starter based on library
-        starter = STARTER_TEMPLATES.get(library, STARTER_TEMPLATES["pyTelegramBotAPI"])
-        (work / "main.py").write_text(starter.replace("{{TOKEN}}", token), encoding="utf-8")
+        (work / entry_file).write_text(STARTERS["pyTelegramBotAPI"], encoding="utf-8")
 
-    # requirements if missing
     req = work / "requirements.txt"
     if not req.exists():
         req.write_text("pyTelegramBotAPI==4.22.1\nrequests==2.32.3\n", encoding="utf-8")
@@ -403,19 +503,17 @@ def new_bot():
         "id": bot_id,
         "name": name,
         "token": token,
-        "library": library,
         "entry": entry_file,
         "owner": int(uid),
         "created_at": datetime.utcnow().isoformat(),
         "status": "stopped",
+        "library": "custom",
     }
     save_bots_db(bots_db)
-
     users = get_users()
     users[uid].setdefault("bots", []).append(bot_id)
     save_users(users)
-
-    flash(f"Bot '{name}' created. Start it from the dashboard.", "success")
+    flash(f"Bot '{name}' created.", "success")
     return redirect(url_for("dashboard"))
 
 @app.route("/bots/<bot_id>/start", methods=["POST"])
@@ -424,6 +522,9 @@ def bot_start(bot_id):
     user = current_user()
     if bot_id not in user.get("bots", []):
         abort(403)
+    if not user_plan_active(user):
+        flash("Plan expired.", "error")
+        return redirect(url_for("dashboard"))
     bots_db = get_bots_db()
     b = bots_db.get(bot_id)
     if not b:
@@ -431,6 +532,7 @@ def bot_start(bot_id):
     ok, msg = start_bot_process(str(session["user_id"]), bot_id, b["token"], b.get("entry", "main.py"))
     if ok:
         b["status"] = "running"
+        b["entry"] = msg if isinstance(msg, str) and msg.endswith(".py") else b.get("entry", "main.py")
         save_bots_db(bots_db)
         flash("Bot started.", "success")
     else:
@@ -476,48 +578,153 @@ def bot_logs(bot_id):
     if bot_id not in user.get("bots", []):
         abort(403)
     log_path = bot_workdir(str(session["user_id"]), bot_id) / "bot.log"
-    content = ""
-    if log_path.exists():
-        content = log_path.read_text(encoding="utf-8", errors="ignore")[-8000:]
+    content = log_path.read_text(encoding="utf-8", errors="ignore")[-12000:] if log_path.exists() else ""
     return render_template("logs.html", site=get_config(), bot_id=bot_id, logs=content)
 
+# ── file manager ─────────────────────────────────────────────────────────────
 @app.route("/files")
 @login_required
 def files():
     uid = str(session["user_id"])
     root = BOTS_DIR / uid
     root.mkdir(parents=True, exist_ok=True)
+    rel = request.args.get("path", "").replace("..", "")
+    cur = (root / rel).resolve()
+    if not str(cur).startswith(str(root.resolve())):
+        abort(403)
+    if not cur.exists():
+        cur = root
+        rel = ""
     items = []
-    total = 0
-    for p in root.rglob("*"):
-        if p.is_file():
-            size = p.stat().st_size
-            total += size
-            items.append({"path": str(p.relative_to(root)), "size": size})
+    if cur.is_dir():
+        for p in sorted(cur.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+            items.append({
+                "name": p.name,
+                "path": str((Path(rel) / p.name).as_posix()) if rel else p.name,
+                "is_dir": p.is_dir(),
+                "size": p.stat().st_size if p.is_file() else 0,
+            })
+    total = sum(f.stat().st_size for f in root.rglob("*") if f.is_file())
     return render_template(
-        "files.html",
-        site=get_config(),
-        items=items,
-        total=total,
-        limit=2.5 * 1024 * 1024 * 1024,
+        "files.html", site=get_config(), items=items, rel=rel,
+        total=total, parent="/".join(rel.split("/")[:-1]) if rel else None,
     )
 
-# ─── ADMIN PANEL ─────────────────────────────────────────────────────────────
+@app.route("/files/upload", methods=["POST"])
+@login_required
+def files_upload():
+    uid = str(session["user_id"])
+    root = BOTS_DIR / uid
+    rel = request.form.get("path", "").replace("..", "")
+    cur = (root / rel).resolve()
+    if not str(cur).startswith(str(root.resolve())):
+        abort(403)
+    cur.mkdir(parents=True, exist_ok=True)
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("No file.", "error")
+        return redirect(url_for("files", path=rel))
+    name = secure_filename(f.filename)
+    dest = cur / name
+    f.save(dest)
+    if name.lower().endswith(".zip"):
+        try:
+            with zipfile.ZipFile(dest, "r") as zf:
+                zf.extractall(cur)
+            dest.unlink(missing_ok=True)
+            flash("Zip uploaded and extracted.", "success")
+        except Exception as e:
+            flash(f"Uploaded but extract failed: {e}", "error")
+    else:
+        flash("File uploaded.", "success")
+    return redirect(url_for("files", path=rel))
+
+@app.route("/files/delete", methods=["POST"])
+@login_required
+def files_delete():
+    uid = str(session["user_id"])
+    root = BOTS_DIR / uid
+    target = request.form.get("target", "").replace("..", "")
+    path = (root / target).resolve()
+    if not str(path).startswith(str(root.resolve())):
+        abort(403)
+    if path.exists():
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            path.unlink(missing_ok=True)
+        flash("Deleted.", "success")
+    parent = "/".join(target.split("/")[:-1])
+    return redirect(url_for("files", path=parent))
+
+@app.route("/files/edit", methods=["GET", "POST"])
+@login_required
+def files_edit():
+    uid = str(session["user_id"])
+    root = BOTS_DIR / uid
+    target = (request.args.get("path") or request.form.get("path") or "").replace("..", "")
+    path = (root / target).resolve()
+    if not str(path).startswith(str(root.resolve())):
+        abort(403)
+    if request.method == "POST":
+        content = request.form.get("content", "")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        flash("Saved.", "success")
+        parent = "/".join(target.split("/")[:-1])
+        return redirect(url_for("files", path=parent))
+    if not path.exists() or not path.is_file():
+        flash("File not found.", "error")
+        return redirect(url_for("files"))
+    # only edit text-ish
+    try:
+        content = path.read_text(encoding="utf-8")
+    except Exception:
+        flash("Cannot edit binary file.", "error")
+        return redirect(url_for("files"))
+    return render_template("edit_file.html", site=get_config(), path=target, content=content)
+
+# ── settings / upgrade ───────────────────────────────────────────────────────
+@app.route("/settings", methods=["GET", "POST"])
+@login_required
+def settings():
+    user = current_user()
+    if request.method == "POST":
+        uname = request.form.get("username", "").strip().lstrip("@").lower()
+        users = get_users()
+        users[str(session["user_id"])]["username"] = uname
+        save_users(users)
+        flash("Profile updated.", "success")
+        return redirect(url_for("settings"))
+    return render_template(
+        "settings.html", site=get_config(), user=user,
+        days=days_left(user), plan_active=user_plan_active(user),
+        plans=get_config()["plans"],
+    )
+
+@app.route("/upgrade", methods=["POST"])
+@login_required
+def upgrade():
+    plan = request.form.get("plan", "free")
+    if plan not in get_config()["plans"]:
+        flash("Invalid plan.", "error")
+        return redirect(url_for("pricing"))
+    # self-serve activate (payment can be manual / admin)
+    set_plan(str(session["user_id"]), plan, notify=True)
+    flash(f"Plan set to {plan.upper()}. Check Telegram for confirmation.", "success")
+    return redirect(url_for("dashboard"))
+
+# ── admin ────────────────────────────────────────────────────────────────────
 @app.route("/admin")
 @admin_required
 def admin_panel():
-    users = get_users()
-    bots_db = get_bots_db()
-    cfg = get_config()
-    running = sum(1 for bid in bots_db if is_bot_running(bid))
     return render_template(
         "admin.html",
-        site=cfg,
-        users=users,
-        bots=bots_db,
-        running=running,
-        total_bots=len(bots_db),
-        total_users=len(users),
+        site=get_config(),
+        users=get_users(),
+        bots=get_bots_db(),
+        running=sum(1 for bid in get_bots_db() if is_bot_running(bid)),
+        plans=get_config()["plans"],
     )
 
 @app.route("/admin/config", methods=["POST"])
@@ -525,16 +732,11 @@ def admin_panel():
 def admin_config():
     cfg = get_config()
     token = request.form.get("hosting_bot_token", "").strip()
-    admins = request.form.get("admin_ids", "").strip()
+    admins = request.form.get("admin_usernames", "").strip()
     if token:
         cfg["hosting_bot_token"] = token
     if admins:
-        ids = []
-        for part in admins.replace(",", " ").split():
-            if part.strip().isdigit():
-                ids.append(int(part.strip()))
-        if ids:
-            cfg["admin_telegram_ids"] = ids
+        cfg["admin_usernames"] = [a.strip().lstrip("@").lower() for a in admins.replace(",", " ").split() if a.strip()]
     save_json(CONFIG_FILE, cfg)
     flash("Config saved.", "success")
     return redirect(url_for("admin_panel"))
@@ -542,12 +744,9 @@ def admin_config():
 @app.route("/admin/user/<uid>/plan", methods=["POST"])
 @admin_required
 def admin_set_plan(uid):
-    plan = request.form.get("plan", "standard")
-    users = get_users()
-    if uid in users:
-        users[uid]["plan"] = plan if plan in ("standard", "premium") else "standard"
-        save_users(users)
-        flash(f"User {uid} plan set to {users[uid]['plan']}.", "success")
+    plan = request.form.get("plan", "free")
+    if set_plan(uid, plan, notify=True):
+        flash(f"User {uid} → {plan}", "success")
     return redirect(url_for("admin_panel"))
 
 @app.route("/admin/bot/<bot_id>/stop", methods=["POST"])
@@ -558,67 +757,10 @@ def admin_stop_bot(bot_id):
     if bot_id in bots_db:
         bots_db[bot_id]["status"] = "stopped"
         save_bots_db(bots_db)
-    flash("Bot force-stopped.", "success")
+    flash("Force stopped.", "success")
     return redirect(url_for("admin_panel"))
 
-# ─── STARTER TEMPLATES ───────────────────────────────────────────────────────
-STARTER_TEMPLATES = {
-    "pyTelegramBotAPI": '''#!/usr/bin/env python3
-import os
-import telebot
-
-TOKEN = os.environ.get("BOT_TOKEN", "{{TOKEN}}")
-bot = telebot.TeleBot(TOKEN)
-
-@bot.message_handler(commands=["start"])
-def start(message):
-    bot.reply_to(message, "Hello from Zia hosting!")
-
-@bot.message_handler(commands=["ping"])
-def ping(message):
-    bot.reply_to(message, "Pong!")
-
-@bot.message_handler(func=lambda m: True)
-def echo(message):
-    bot.reply_to(message, f"You said: {message.text}")
-
 if __name__ == "__main__":
-    print("Bot starting...")
-    bot.infinity_polling()
-''',
-    "python-telegram-bot": '''#!/usr/bin/env python3
-import os
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-
-TOKEN = os.environ.get("BOT_TOKEN", "{{TOKEN}}")
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hello from Zia hosting!")
-
-async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Pong!")
-
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"You said: {update.message.text}")
-
-def main():
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("ping", ping))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
-    print("Bot starting...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
-''',
-}
-
-# ─── RUN ─────────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", "5000"))
-    print(f"ZiaDev Hosting starting on http://0.0.0.0:{port}")
-    print("Edit data/config.json for bot token + admin ids")
+    print(f"Ziaa starting on http://0.0.0.0:{port}")
     app.run(host="0.0.0.0", port=port, debug=os.environ.get("FLASK_DEBUG") == "1")
