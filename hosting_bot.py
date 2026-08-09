@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
-"""
-TyraDev Hosting Bot — sends OTP codes + basic help
-Token is read from data/config.json (hosting_bot_token)
-"""
-
-import json
-import sys
+"""Ziaa Hosting Bot — OTP delivery + identity"""
+import json, sys
 from pathlib import Path
-
 import telebot
 
 BASE = Path(__file__).resolve().parent
@@ -15,7 +9,7 @@ CONFIG = BASE / "data" / "config.json"
 
 def load_token():
     if not CONFIG.exists():
-        print("data/config.json missing. Start the web app once first.")
+        print("Missing data/config.json")
         sys.exit(1)
     cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
     token = cfg.get("hosting_bot_token", "")
@@ -30,20 +24,20 @@ bot = telebot.TeleBot(load_token())
 def start(message):
     bot.reply_to(
         message,
-        "<b>Ziaa Hosting Bot</b>\n\n"
-        "This bot delivers your login OTP codes.\n"
+        "<b>Ziaa Hosting</b>\n\n"
+        "I deliver login codes for the panel.\n"
         "1. Open the website\n"
         "2. Enter your Telegram ID\n"
-        "3. Press <b>Send Login OTP</b>\n"
-        "4. Come back here — the code arrives automatically\n\n"
-        f"Your Telegram ID: <code>{message.from_user.id}</code>",
+        "3. Come here for the OTP\n\n"
+        "Here Is The Website https://zia-hosting.onrender.com/dashboard\n\n"
+        f"Your ID: <code>{message.from_user.id}</code>",
         parse_mode="HTML",
     )
 
 @bot.message_handler(commands=["id"])
-def my_id(message):
-    bot.reply_to(message, f"Your Telegram ID:\n<code>{message.from_user.id}</code>", parse_mode="HTML")
+def myid(message):
+    bot.reply_to(message, f"<code>{message.from_user.id}</code>", parse_mode="HTML")
 
 if __name__ == "__main__":
-    print("ZiaaDev Hosting Bot running…")
+    print("Ziaa hosting bot running...")
     bot.infinity_polling()
