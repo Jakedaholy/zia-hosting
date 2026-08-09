@@ -3,111 +3,67 @@
 {% block body %}
 <div class="app-shell">
   <aside class="sidebar">
-    <div class="brand">
-      <div class="logo">⬡</div>
-      <div>
-        <strong>{{ site.site_name|upper }}</strong>
-        <small style="display:block;color:var(--muted);font-size:.7rem;letter-spacing:.08em">HOSTING</small>
-      </div>
-    </div>
+    <div class="brand"><div class="logo">Z</div><div><strong>{{ site.site_name|upper }}</strong><small class="side-sub">HOSTING</small></div></div>
     <nav class="side-nav">
       <div class="nav-section">GENERAL</div>
-      <a class="active" href="{{ url_for('dashboard') }}">▦ Overview</a>
-      <a href="{{ url_for('files') }}">📁 Files</a>
-      <a href="{{ url_for('new_bot') }}">↗ New Project</a>
+      <a class="active" href="{{ url_for('dashboard') }}">Overview</a>
+      <a href="{{ url_for('files') }}">Files</a>
+      <a href="{{ url_for('new_bot') }}">New Bot</a>
+      <a href="{{ url_for('pricing') }}">Pricing</a>
       <div class="nav-section">ACCOUNT</div>
-      <a href="#">🛡 {{ user.plan|capitalize }} Plan</a>
-      {% if user.telegram_id in site.admin_telegram_ids %}
-      <a href="{{ url_for('admin_panel') }}">⚙ Admin</a>
-      {% endif %}
+      <a href="{{ url_for('settings') }}">Settings</a>
+      {% if is_admin %}<a href="{{ url_for('admin_panel') }}">Admin</a>{% endif %}
     </nav>
-    <div class="side-user">
-      <span class="dot"></span>
-      tg_{{ user.telegram_id }}
-      <small>{{ user.plan|capitalize }}</small>
-    </div>
+    <div class="side-user"><span class="dot"></span>tg_{{ user.telegram_id }}<small>{{ user.plan|upper }} · {{ days }}d left</small></div>
   </aside>
-
   <main class="main">
     <header class="topbar">
       <h2>Overview</h2>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span class="pill cyan" id="clock">--:--:--</span>
-        <a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">Logout</a>
-      </div>
+      <div class="topbar-right"><span class="pill cyan" id="clock">--:--:--</span><a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">Logout</a></div>
     </header>
-
     <div class="page">
       <div class="quick-actions">
         <a href="{{ url_for('new_bot') }}" class="btn btn-primary">+ New Bot</a>
         <a href="{{ url_for('files') }}" class="btn btn-ghost">File Manager</a>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-cyan">↻ Refresh</a>
+        <a href="{{ url_for('pricing') }}" class="btn btn-cyan">Upgrade</a>
       </div>
-
       <div class="welcome-card">
-        <h1>Welcome back, tg_{{ user.telegram_id }}</h1>
+        <h1>Welcome back{% if user.username %}, @{{ user.username }}{% endif %}</h1>
         <p class="muted" style="margin:0">
           {% if active %}<span class="pulse"></span>{% endif %}
-          <strong>{{ bots|length }}</strong> bots total
-          · <span class="pill green">{{ active }} active</span>
-          · <span class="pill orange">{{ stopped }} stopped</span>
+          <strong>{{ bots|length }}</strong> bots ·
+          <span class="pill green">{{ active }} active</span>
+          <span class="pill orange">{{ stopped }} stopped</span>
+          {% if not plan_active %}<span class="pill" style="border:1px solid var(--red);color:#ffb3c1">PLAN EXPIRED</span>{% endif %}
         </p>
       </div>
-
       <div class="grid-3">
-        <div class="card">
-          <div class="card-label">RUNNING</div>
-          <p class="stat-big green">{{ active }}</p>
-          <p class="muted" style="margin-top:6px">live processes</p>
+        <div class="card"><div class="card-label">RUNNING</div><p class="stat-big green">{{ active }}</p></div>
+        <div class="card"><div class="card-label">SLOTS</div><p class="stat-big">{{ bots|length }}/{{ limit }}</p>
+          <div class="bar"><div class="bar-fill" style="width:{{ [(bots|length / (limit if limit>0 else 1) * 100), 100]|min }}%"></div></div>
         </div>
-        <div class="card">
-          <div class="card-label">SLOTS</div>
-          <p class="stat-big">{{ bots|length }}/{{ limit }}</p>
-          <div class="bar"><div class="bar-fill" style="width: {{ [(bots|length / limit * 100), 100]|min }}%"></div></div>
-        </div>
-        <div class="card">
-          <div class="card-label">PLAN</div>
-          <p class="stat-big" style="font-size:1.4rem">{{ user.plan|capitalize }}</p>
-          <p class="muted" style="margin-top:6px">{{ limit }} bot capacity</p>
-        </div>
+        <div class="card"><div class="card-label">PLAN</div><p class="stat-big" style="font-size:1.35rem">{{ user.plan|upper }}</p>
+          <p class="muted">{{ days }} day{{ 's' if days!=1 else '' }} remaining</p></div>
       </div>
-
-      {% if bots|length >= limit %}
-      <div class="alert">Bot limit reached — all {{ limit }} slots used.</div>
-      {% endif %}
-
       <h3 class="section-title">Your bots</h3>
       {% if not bots %}
-      <div class="empty">No bots yet. Deploy one to light this panel up.</div>
+      <div class="empty">No bots yet. Create one when your plan is active.</div>
       {% else %}
       <div class="bot-list">
         {% for b in bots %}
         <div class="bot-row">
-          <div>
-            <strong>{% if b.running %}<span class="pulse"></span>{% endif %}{{ b.name }}</strong>
-            <small>{{ b.id }} · {{ b.library }} · {{ b.created_at[:10] if b.created_at else '' }}</small>
-          </div>
-          <div class="bot-status">
-            {% if b.running %}
-            <span class="pill green">running</span>
-            {% else %}
-            <span class="pill orange">stopped</span>
-            {% endif %}
-          </div>
+          <div><strong>{% if b.running %}<span class="pulse"></span>{% endif %}{{ b.name }}</strong>
+            <small>{{ b.id }} · entry {{ b.entry }} · {{ b.created_at[:10] if b.created_at else '' }}</small></div>
+          <div>{% if b.running %}<span class="pill green">running</span>{% else %}<span class="pill orange">stopped</span>{% endif %}</div>
           <div class="bot-actions">
             {% if b.running %}
-            <form method="post" action="{{ url_for('bot_stop', bot_id=b.id) }}">
-              <button class="btn btn-ghost btn-sm">Stop</button>
-            </form>
+            <form method="post" action="{{ url_for('bot_stop', bot_id=b.id) }}"><button class="btn btn-ghost btn-sm">Stop</button></form>
             {% else %}
-            <form method="post" action="{{ url_for('bot_start', bot_id=b.id) }}">
-              <button class="btn btn-primary btn-sm">Start</button>
-            </form>
+            <form method="post" action="{{ url_for('bot_start', bot_id=b.id) }}"><button class="btn btn-primary btn-sm">Start</button></form>
             {% endif %}
             <a class="btn btn-cyan btn-sm" href="{{ url_for('bot_logs', bot_id=b.id) }}">Logs</a>
-            <form method="post" action="{{ url_for('bot_delete', bot_id=b.id) }}" onsubmit="return confirm('Delete this bot?')">
-              <button class="btn btn-danger btn-sm">Delete</button>
-            </form>
+            <form method="post" action="{{ url_for('bot_delete', bot_id=b.id) }}" onsubmit="return confirm('Delete bot?')">
+              <button class="btn btn-danger btn-sm">Delete</button></form>
           </div>
         </div>
         {% endfor %}
@@ -116,12 +72,5 @@
     </div>
   </main>
 </div>
-<script>
-function tick(){
-  const d=new Date();
-  const el=document.getElementById('clock');
-  if(el) el.textContent=d.toLocaleTimeString();
-}
-tick(); setInterval(tick,1000);
-</script>
+<script>function t(){const e=document.getElementById('clock');if(e)e.textContent=new Date().toLocaleTimeString()}t();setInterval(t,1000)</script>
 {% endblock %}

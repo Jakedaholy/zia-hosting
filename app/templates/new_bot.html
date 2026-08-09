@@ -1,55 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Create Bot — {{ site.site_name }}{% endblock %}
+{% block title %}New Bot — {{ site.site_name }}{% endblock %}
 {% block body %}
 <div class="app-shell">
   <aside class="sidebar">
-    <div class="brand">
-      <div class="logo">⬡</div>
-      <div><strong>{{ site.site_name|upper }}</strong><small>HOSTING</small></div>
-    </div>
+    <div class="brand"><div class="logo">Z</div><div><strong>{{ site.site_name|upper }}</strong><small class="side-sub">HOSTING</small></div></div>
     <nav class="side-nav">
-      <div class="nav-section">GENERAL</div>
-      <a href="{{ url_for('dashboard') }}">▦ Overview</a>
-      <a href="{{ url_for('files') }}">📁 Files</a>
-      <a class="active" href="{{ url_for('new_bot') }}">↗ New Project</a>
+      <a href="{{ url_for('dashboard') }}">Overview</a>
+      <a class="active" href="{{ url_for('new_bot') }}">New Bot</a>
+      <a href="{{ url_for('files') }}">Files</a>
     </nav>
   </aside>
   <main class="main">
-    <header class="topbar">
-      <h2>Create New Bot</h2>
-      <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">← Back</a>
-    </header>
+    <header class="topbar"><h2>Create bot</h2><a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">Back</a></header>
     <div class="page narrow">
-      <p class="muted">Deploy your Telegram bot in seconds</p>
-
       <form method="post" enctype="multipart/form-data" class="form card">
-        <label>Bot name</label>
-        <input type="text" name="name" placeholder="My cool bot" />
-
-        <label>Bot token (from @BotFather)</label>
-        <input type="text" name="token" placeholder="123456:ABC-DEF..." required />
-
-        <label>Library</label>
-        <select name="library">
-          <option value="pyTelegramBotAPI">pyTelegramBotAPI (sync)</option>
-          <option value="python-telegram-bot">python-telegram-bot (async)</option>
-        </select>
-
-        <label>Upload bot file (optional)</label>
-        <input type="file" name="bot_file" accept=".py,.zip" />
-        <p class="hint">Leave empty to use a starter template. Upload .py or .zip.</p>
-
-        <button type="submit" class="btn btn-primary btn-block">Create &amp; Deploy</button>
+        <label>NAME</label>
+        <input type="text" name="name" placeholder="My bot"/>
+        <label>BOT TOKEN</label>
+        <input type="text" name="token" placeholder="123456:AA..." required/>
+        <label>STARTUP FILE</label>
+        <input type="text" name="entry_file" value="main.py" placeholder="main.py"/>
+        <p class="hint">Used after zip extract. Common: main.py, bot.py, app.py</p>
+        <label>UPLOAD (.py or .zip)</label>
+        <input type="file" name="bot_file" accept=".py,.zip"/>
+        <p class="hint">Zip is auto-extracted. Leave empty to use a starter template.</p>
+        <button class="btn btn-primary btn-block" type="submit">Create bot</button>
       </form>
-
-      <div class="card notes">
-        <strong>Important notes</strong>
-        <ul>
-          <li>Your bot token is available as <code>os.environ.get('BOT_TOKEN')</code></li>
-          <li>Each bot gets its own folder for files</li>
-          <li>You can add more files later via File Manager</li>
-        </ul>
-      </div>
     </div>
   </main>
 </div>

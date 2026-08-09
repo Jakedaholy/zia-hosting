@@ -3,37 +3,54 @@
 {% block body %}
 <div class="app-shell">
   <aside class="sidebar">
-    <div class="brand">
-      <div class="logo">⬡</div>
-      <div><strong>{{ site.site_name|upper }}</strong><small>HOSTING</small></div>
-    </div>
+    <div class="brand"><div class="logo">Z</div><div><strong>{{ site.site_name|upper }}</strong><small class="side-sub">HOSTING</small></div></div>
     <nav class="side-nav">
-      <div class="nav-section">GENERAL</div>
-      <a href="{{ url_for('dashboard') }}">▦ Overview</a>
-      <a class="active" href="{{ url_for('files') }}">📁 Files</a>
-      <a href="{{ url_for('new_bot') }}">↗ New Project</a>
+      <a href="{{ url_for('dashboard') }}">Overview</a>
+      <a class="active" href="{{ url_for('files') }}">Files</a>
+      <a href="{{ url_for('new_bot') }}">New Bot</a>
     </nav>
   </aside>
   <main class="main">
-    <header class="topbar">
-      <h2>File Manager</h2>
-      <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">← Back</a>
-    </header>
+    <header class="topbar"><h2>File Manager</h2><a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">Back</a></header>
     <div class="page">
       <div class="card">
-        <div class="card-label">STORAGE USAGE</div>
-        <h3>{{ '%.1f'|format(total / 1024) }} KB <small class="muted">of 2.5 GB</small></h3>
-        <div class="bar"><div class="bar-fill" style="width: {{ (total / limit * 100)|round(4) }}%"></div></div>
-        <p class="muted">{{ items|length }} files</p>
+        <div class="card-label">STORAGE</div>
+        <p class="stat-big" style="font-size:1.3rem">{{ '%.1f'|format(total/1024) }} KB</p>
+        <p class="muted">path: /{{ rel or '' }}</p>
+        {% if parent is not none %}
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('files', path=parent) }}">↑ Up</a>
+        {% endif %}
       </div>
+      <form class="card form" method="post" action="{{ url_for('files_upload') }}" enctype="multipart/form-data" style="margin-top:12px">
+        <input type="hidden" name="path" value="{{ rel }}"/>
+        <label>UPLOAD TO THIS FOLDER</label>
+        <input type="file" name="file" required/>
+        <button class="btn btn-primary" type="submit">Upload</button>
+        <p class="hint">Zip files auto-extract here.</p>
+      </form>
       <div class="file-list">
         {% for it in items %}
         <div class="file-row">
-          <span>{{ it.path }}</span>
-          <span class="muted">{{ it.size }} B</span>
+          <div>
+            {% if it.is_dir %}
+            <a href="{{ url_for('files', path=it.path) }}"><strong>📁 {{ it.name }}</strong></a>
+            {% else %}
+            <strong>📄 {{ it.name }}</strong>
+            <small class="muted">{{ it.size }} B</small>
+            {% endif %}
+          </div>
+          <div class="bot-actions">
+            {% if not it.is_dir %}
+            <a class="btn btn-cyan btn-sm" href="{{ url_for('files_edit', path=it.path) }}">Edit</a>
+            {% endif %}
+            <form method="post" action="{{ url_for('files_delete') }}" onsubmit="return confirm('Delete {{ it.name }}?')">
+              <input type="hidden" name="target" value="{{ it.path }}"/>
+              <button class="btn btn-danger btn-sm">Delete</button>
+            </form>
+          </div>
         </div>
         {% else %}
-        <div class="empty">No files yet.</div>
+        <div class="empty">Empty folder.</div>
         {% endfor %}
       </div>
     </div>

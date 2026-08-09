@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Settings — {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="logo">Z</div><div><strong>{{ site.site_name|upper }}</strong></div></div>
+    <nav class="side-nav">
+      <a href="{{ url_for('dashboard') }}">Overview</a>
+      <a class="active" href="{{ url_for('settings') }}">Settings</a>
+      <a href="{{ url_for('pricing') }}">Pricing</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="topbar"><h2>Settings</h2></header>
+    <div class="page narrow">
+      <div class="card">
+        <div class="card-label">CURRENT PLAN</div>
+        <p class="stat-big" style="font-size:1.4rem">{{ user.plan|upper }}</p>
+        <p class="muted">{{ days }} days left · {% if plan_active %}active{% else %}expired{% endif %}</p>
+      </div>
+      <form method="post" class="form card" style="margin-top:12px">
+        <label>TELEGRAM USERNAME</label>
+        <input type="text" name="username" value="{{ user.username or '' }}" placeholder="maisanyvokei"/>
+        <p class="hint">Admin access is granted to username <b>maisanyvokei</b>.</p>
+        <button class="btn btn-primary" type="submit">Save profile</button>
+      </form>
+      <div class="card" style="margin-top:12px">
+        <div class="card-label">UPGRADE</div>
+        <div class="grid-2">
+          {% for name,p in plans.items() %}
+          <form method="post" action="{{ url_for('upgrade') }}">
+            <input type="hidden" name="plan" value="{{ name }}"/>
+            <button class="btn btn-ghost btn-block" type="submit">{{ name|upper }} · ${{ p.price }} · {{ p.bots }} bots · {{ p.days }}d</button>
+          </form>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+{% endblock %}

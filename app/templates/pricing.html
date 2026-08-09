@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Pricing — {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="landing">
+  <nav class="nav">
+    <div class="brand"><div class="logo">Z</div><span>{{ site.site_name }}</span></div>
+    <div class="nav-actions">
+      <a href="{{ url_for('index') }}" class="btn btn-ghost">Home</a>
+      <a href="{{ url_for('login') }}" class="btn btn-primary">Sign In</a>
+    </div>
+  </nav>
+  <section class="hero" style="padding-bottom:30px">
+    <h1>Plans</h1>
+    <p class="lead">Pick a tier. Duration starts when the plan is activated.</p>
+  </section>
+  <section class="features">
+    <div class="grid-2" style="grid-template-columns:repeat(4,1fr);max-width:1100px;margin:0 auto">
+      {% for name, p in plans.items() %}
+      <div class="card plan-card">
+        <div class="card-label">{{ name|upper }}</div>
+        <p class="stat-big">${{ p.price }}</p>
+        <p class="muted">{{ p.bots }} bot{{ 's' if p.bots != 1 else '' }} · {{ p.days }} days</p>
+        <form method="post" action="{{ url_for('upgrade') }}" style="margin-top:14px">
+          <input type="hidden" name="plan" value="{{ name }}"/>
+          <button class="btn btn-primary btn-block" type="submit">{% if name=='free' %}Activate{% else %}Select{% endif %}</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="muted" style="text-align:center;margin-top:24px">Upgrades notify you on Telegram automatically.</p>
+  </section>
+</div>
+{% endblock %}

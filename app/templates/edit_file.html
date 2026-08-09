@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Edit — {{ site.site_name }}{% endblock %}
+{% block body %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="logo">Z</div><div><strong>{{ site.site_name|upper }}</strong></div></div>
+    <nav class="side-nav"><a href="{{ url_for('files') }}">Files</a></nav>
+  </aside>
+  <main class="main">
+    <header class="topbar"><h2>Edit · {{ path }}</h2><a href="{{ url_for('files') }}" class="btn btn-ghost btn-sm">Back</a></header>
+    <div class="page">
+      <form method="post" class="form">
+        <input type="hidden" name="path" value="{{ path }}"/>
+        <textarea name="content" rows="24" style="width:100%;font-family:ui-monospace,monospace;background:#06080e;border:1px solid var(--line);border-radius:14px;padding:14px;color:#d7def0">{{ content }}</textarea>
+        <div style="margin-top:12px"><button class="btn btn-primary" type="submit">Save</button></div>
+      </form>
+    </div>
+  </main>
+</div>
+{% endblock %}
